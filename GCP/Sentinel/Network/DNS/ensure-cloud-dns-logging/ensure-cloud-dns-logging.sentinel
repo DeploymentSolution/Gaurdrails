@@ -1,0 +1,41 @@
+import "tfplan-functions" as plan
+import "tfconfig/v2" as tfconfig
+import "strings"
+
+allDNSPolicyResources = plan.find_resources("google_dns_policy")
+allVPCResources = plan.find_resources("google_compute_network")
+dns_logging_validated = true
+
+## Config Resource Check for VPC with DNS policy
+list_of_vpc_with_dns_policies = []
+for tfconfig.resources as addr, rc {
+	if rc.type is "google_dns_policy" and rc.mode is "managed" {
+		for tfconfig.resources[strings.split(rc.address, "[")[0]].config.networks as _, nw {
+			append(list_of_vpc_with_dns_policies, nw.network_url.references[0])
+			print(nw.network_url.references[0], "has DNS policy")
+		}
+	}
+}
+
+## Check for VPC without DNS Policy
+vpc_without_dns_policy = []
+for allVPCResources as addr, rc {
+	if addr not in list_of_vpc_with_dns_policies {
+		append(vpc_without_dns_policy, addr)
+		print(addr, "has no attached DNS policy")
+	}
+}
+
+## Check if logging enabled in Cloud DNS Policy
+dns_logging_enabled = plan.filter_attribute_is_not_value(allDNSPolicyResources, "enable_logging", true, true)
+if(length(dns_logging_enabled["messages"]) is not 0 ) {
+	dns_logging_validated = false
+	print("Policy Violation : Cloud DNS Logging is not enabled.")
+}
+
+print ("Policy Validation Rule - Cloud DNS Logging must be enabled for all VPC Networks")
+
+main = rule {
+	length(vpc_without_dns_policy) == 0 and
+	dns_logging_validated
+}
