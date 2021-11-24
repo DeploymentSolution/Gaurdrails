@@ -1,0 +1,26 @@
+# This policy uses the Sentinel tfplan/v2 import
+# private private_ip_google_access should be enabled for sub networks
+ 
+ import "tfplan-functions" as plan
+
+# Get all compute sub network resources
+
+allVPCResources = plan.find_resources ( "google_compute_subnetwork")
+
+Validated = true
+
+# Filter to compute sub network resources with violations
+# Warnings will be printed for all violations since the last parameter in Restrict_rule is true
+
+Restrict_rule = plan.filter_attribute_is_not_value ( allVPCResources, "private_ip_google_access", true , true)
+
+ # Print warnings if there are any violations
+if  length(Restrict_rule["messages"]) > 0  {
+   Validated = false
+   print("Do not allow VPC Network subnets to have Private Google access disabled")
+} 
+
+# Main rule
+main = rule {
+	Validated
+}
